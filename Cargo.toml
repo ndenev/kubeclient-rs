@@ -24,4 +24,5 @@ url_serde = "0.2.0"
 openssl = "0.9.15"
 walkdir = "1.0.7"
 reqwest = "0.8.0"
-k8s-openapi = { git = "https://github.com/Arnavion/k8s-openapi-codegen", branch = "master" }
+#k8s-openapi = { git = "https://github.com/Arnavion/k8s-openapi-codegen", branch = "master" }
+k8s-openapi = { git = "https://github.com/ndenev/k8s-openapi-codegen.git", rev = "475b5b2" }
