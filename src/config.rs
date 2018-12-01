@@ -3,17 +3,17 @@
 // Lifted from https://github.com/camallo/k8s-client-rs/blob/master/src/kubeconfig.rs
 // until a more complete kubernetes client exists
 
+use base64;
+use errors::*;
+use openssl::pkey::PKey;
+use openssl::x509::X509;
+use serde_yaml;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use serde_yaml;
-use openssl::x509::X509;
-use openssl::pkey::PKey;
 use url::Url;
 use url_serde;
-use base64;
-use errors::*;
 
 /// Configuration to build a Kubernetes client.
 #[derive(Debug, Serialize, Deserialize)]
@@ -108,14 +108,31 @@ pub struct AuthInfo {
 
 impl AuthInfo {
     pub fn client_certificate(&self) -> Option<X509> {
-        get_from_b64data_or_file(&self.client_certificate_data, &self.client_certificate_file)
-            .map(|k| X509::from_pem(k.as_ref())
-                .expect("Invalid kubeconfig - client cert is not PEM-encoded"))
+        get_from_b64data_or_file(&self.client_certificate_data, &self.client_certificate_file).map(
+            |k| {
+                X509::from_pem(k.as_ref())
+                    .expect("Invalid kubeconfig - client cert is not PEM-encoded")
+            },
+        )
     }
     pub fn client_key(&self) -> Option<PKey> {
-        get_from_b64data_or_file(&self.client_key_data, &self.client_key_file)
-            .map(|k| PKey::private_key_from_pem(k.as_ref())
-                .expect("Invalid kubeconfig - client key is not PEM-encoded"))
+        get_from_b64data_or_file(&self.client_key_data, &self.client_key_file).map(|k| {
+            PKey::private_key_from_pem(k.as_ref())
+                .expect("Invalid kubeconfig - client key is not PEM-encoded")
+        })
+    }
+    pub fn token(&self) -> Option<String> {
+        if let Some(ref token) = self.token {
+            Some(token.to_string())
+        } else if let Some(ref token_file) = self.token_file {
+            let mut token = String::new();
+            let mut f = File::open(token_file).expect("Unable to open file.");
+            f.read_to_string(&mut token)
+                .expect("File data is not UTF-8.");
+            Some(token.to_string())
+        } else {
+            None
+        }
     }
 }
 
@@ -166,7 +183,8 @@ impl KubeConfig {
             1 => &ctxs[0].context,
             _ => bail!("ambiguous context {}", name),
         };
-        let clus: Vec<&NamedCluster> = self.clusters
+        let clus: Vec<&NamedCluster> = self
+            .clusters
             .iter()
             .filter(|c| c.name == ctx.cluster)
             .collect();
@@ -175,10 +193,7 @@ impl KubeConfig {
             1 => &clus[0].cluster,
             _ => bail!("ambiguous cluster {}", name),
         };
-        let auths: Vec<&NamedAuthInfo> = self.users
-            .iter()
-            .filter(|c| c.name == ctx.user)
-            .collect();
+        let auths: Vec<&NamedAuthInfo> = self.users.iter().filter(|c| c.name == ctx.user).collect();
         let auth = match auths.len() {
             0 => bail!("unknown auth-info {}", name),
             1 => &auths[0].user,
